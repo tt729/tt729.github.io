@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+  <meta charset="UTF-8">
+  <title>テトリス</title>
+  <style>
+    #container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      height: 100vh;
+    }
+
+    #game-container {
+      display: flex;
+      justify-content: center;
+      align-items: flex-end;
+    }
+
+    canvas {
+      background-color: #f0f0f0;
+    }
+
+    #controls {
+      font-size: 14px;
+      background-color: rgba(255, 255, 255, 0.7);
+      border: 1px solid #ccc;
+      padding: 10px;
+      border-radius: 5px;
+      margin-left: 10px;
+    }
+  </style>
+
+</head>
+
+<body>
+  <div id="container">
+    <div id="game-container">
+      <canvas id="game" width="500" height="600"></canvas>
+      <div id="controls">
+        <p>操作方法:</p>
+        <ul>
+          <li>スペースキー: 回転</li>
+          <li>右矢印: 右移動</li>
+          <li>左矢印: 左移動</li>
+          <li>下矢印: 下移動</li>
+          <li>Shift: ホールド</li>
+        </ul>
+      </div>
+    </div>
+    <script>
+      const canvas = document.getElementById('game');
+      const ctx = canvas.getContext('2d');
+      const blockSize = 30;
+      const rows = 20;
+      const cols = 10;
+      const extraCols = 5;
+      const board = Array.from({ length: rows }, () => Array(cols).fill(0));
+      let held = { shape: null, color: null };
+      let canSwap = true;
+      let placedTetriminos = 0;
+      let clearedLines = 0;
+      let lastTwoIndexes = [-1, -1];
+      let highScore = 0;
+      let gameOver = false;
+
+      const tetriminos = [
+        [[1, 1, 1], [0, 1, 0]],
+        [[1, 1], [1, 1]],
+        [[1, 1, 0], [0, 1, 1]],
+        [[0, 1, 1], [1, 1, 0]],
+        [[1, 1, 1], [1, 0, 0]],
+        [[1, 1, 1], [0, 0, 1]],
+        [[1, 1, 1, 1]],
+      ];
+
+      const colors = ['purple', 'yellow', 'green', 'red', 'blue', 'orange', 'cyan'];
+      let nextTetriminos = [randomTetrimino(), randomTetrimino(), randomTetrimino()];
+
+      function randomTetrimino() {
+        let index;
+        do {
+          index = Math.floor(Math.random() * tetriminos.length);
+        } while (index === lastTwoIndexes[0] && index === lastTwoIndexes[1]);
+
+        lastTwoIndexes[0] = lastTwoIndexes[1];
+        lastTwoIndexes[1] = index;
+
+        return { shape: tetriminos[index], color: colors[index] };
+      }
+
+      function drawBlock(x, y, color) {
+        ctx.fillStyle = color;
+        ctx.fillRect(x * blockSize, y * blockSize, blockSize, blockSize);
+        ctx.strokeStyle = 'black';
+        ctx.strokeRect(x * blockSize, y * blockSize, blockSize, blockSize);
+      }
+
+      function drawGrid() {
+        ctx.strokeStyle = 'rgba(128, 128, 128, 0.5)';
+        for (let row = 0; row < rows; row++) {
+          for (let col = 0; col < cols; col++) {
+            ctx.strokeRect(col * blockSize, row * blockSize, blockSize, blockSize);
+          }
+        }
+      }
+
+      function drawHeldTetrimino() {
+        // HOLD テキストの描画
+        ctx.font = "24px Arial";
+        ctx.fillStyle = "black";
+        const holdText = "HOLD";
+        const holdTextWidth = ctx.measureText(holdText).width;
+        ctx.fillText(holdText, (cols + 1) * blockSize + (extraCols * blockSize - holdTextWidth) / 2, blockSize);
+
+        if (held.shape !== null) {
+          const xOffset = Math.floor((extraCols * blockSize - held.shape[0].length * blockSize) / 2);
+          const yOffset = 2 * blockSize;
+
+          // キープしているテトリミノを描画
+          for (let row = 0; row < held.shape.length; row++) {
+            for (let col = 0; col < held.shape[row].length; col++) {
+              if (held.shape[row][col]) {
+                ctx.fillStyle = held.color;
+                ctx.fillRect((cols + col + 1) * blockSize + xOffset, (row + 1) * blockSize + yOffset, blockSize, blockSize);
+                ctx.strokeStyle = 'black';
+                ctx.strokeRect((cols + col + 1) * blockSize + xOffset, (row + 1) * blockSize + yOffset, blockSize, blockSize);
+              }
+            }
+          }
+        }
+      }
+
+      function drawClearedLines() {
+        ctx.font = '14px Arial';
+        ctx.textAlign = 'left';
+        ctx.fillStyle = 'black';
+        ctx.fillText("LINES: " + clearedLines, (cols + 1) * blockSize, (rows - 1) * blockSize);
+      }
+
+      function draw() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        drawGrid();
+        drawHeldTetrimino();
+        drawClearedLines();
+        for (let row = 0; row < rows; row++) {
+          for (let col = 0; col < cols; col++) {
+            if (board[row][col]) {
+              drawBlock(col, row, board[row][col]);
+            }
+          }
+        }
+        if (current) {
+          drawTetrimino(current.shape, currentPosition.x, currentPosition.y);
+        }
+      }
+
+      function drawTetrimino(tetrimino, x, y) {
+        for (let row = 0; row < tetrimino.length; row++) {
+          for (let col = 0; col < tetrimino[row].length; col++) {
+            if (tetrimino[row][col]) {
+              drawBlock(x + col, y + row, current.color);
+            }
+          }
+        }
+      }
+
+      function retry() {
+        clearInterval(interval);
+        for (let row = 0; row < rows; row++) {
+          board[row].fill(0);
+        }
+        held = { shape: null, color: null };
+        canSwap = true;
+        totalLinesCleared = 0;
+        current = randomTetrimino();
+        next = randomTetrimino();
+        currentPosition = { x: Math.floor(cols / 2) - 1, y: 0 };
+        interval = setInterval(drop, 500);
+      }
+
+      function isValidMove(x, y, tetrimino) {
+        for (let row = 0; row < tetrimino.length; row++) {
+          for (let col = 0; col < tetrimino[row].length; col++) {
+            if (tetrimino[row][col] &&
+              (y + row < 0 || y + row >= rows || x + col < 0 || x + col >= cols || board[y + row][x + col])) {
+              return false;
+            }
+          }
+        }
+        return true;
+      }
+
+      function collides(board, shape, x, y) {
+        for (let row = 0; row < shape.length; row++) {
+          for (let col = 0; col < shape[row].length; col++) {
+            if (shape[row][col] && (board[row + y] === undefined || board[row + y][col + x] === undefined || board[row + y][col + x])) {
+              return true;
+            }
+          }
+        }
+        return false;
+      }
+
+      function placeTetrimino() {
+        for (let row = 0; row < current.shape.length; row++) {
+          for (let col = 0; col < current.shape[row].length; col++) {
+            if (current.shape[row][col]) {
+              board[currentPosition.y + row][currentPosition.x + col] = current.color;
+            }
+          }
+        }
+
+        canSwap = true;
+        current = nextTetriminos.shift();
+        nextTetriminos.push(randomTetrimino());
+        currentPosition = { x: Math.floor(cols / 2) - 1, y: 0 };
+
+        if (collides(board, current.shape, currentPosition.x, currentPosition.y)) {
+          gameOver = true;
+          showGameOver();
+        }
+      }
+
+      function removeFullLines() {
+        outer: for (let row = rows - 1; row >= 0;) {
+          for (let col = 0; col < cols; col++) {
+            if (!board[row][col]) {
+              row--;
+              continue outer;
+            }
+          }
+          board.splice(row, 1);
+          board.unshift(Array(cols).fill(0));
+          clearedLines++;
+        }
+      }
+
+      function move(dir) {
+        if (isValidMove(currentPosition.x + dir, currentPosition.y, current.shape)) {
+          currentPosition.x += dir;
+        }
+      }
+
+      function drop() {
+        if (isValidMove(currentPosition.x, currentPosition.y + 1, current.shape)) {
+          currentPosition.y++;
+        } else {
+          placeTetrimino();
+          removeFullLines(); // 追加
+        }
+      }
+
+      function rotate(matrix) {
+        const result = matrix[0].map((_, i) => matrix.map(row => row[i]));
+        return result.reverse();
+      }
+
+      function rotateTetrimino() {
+        const rotated = rotate(current.shape);
+        const offsetX = currentPosition.x <= 0 ? 1 : currentPosition.x >= cols - current.shape[0].length ? -1 : 0;
+        if (isValidMove(currentPosition.x + offsetX, currentPosition.y, rotated)) {
+          current.shape = rotated;
+          currentPosition.x += offsetX;
+        }
+      }
+
+      function showGameOver() {
+        clearInterval(interval);
+        // ハイスコアを更新
+        if (clearedLines > highScore) {
+          highScore = clearedLines;
+        }
+
+        if (confirm("ゲームオーバー\n\nLINES: " + clearedLines + "\nHIGH SCORE: " + highScore)) {
+          retry();
+        }
+      }
+
+      function swapHeld() {
+        if (!canSwap) return;
+
+        if (held.shape === null) {
+          held.shape = current.shape;
+          held.color = current.color;
+          current.shape = nextTetriminos[0].shape;
+          current.color = nextTetriminos[0].color;
+          nextTetriminos.shift();
+          nextTetriminos.push(randomTetrimino());
+        } else {
+          [current.shape, held.shape] = [held.shape, current.shape];
+          [current.color, held.color] = [held.color, current.color];
+
+          // テトリミノをリセット
+          const currentTetriminoIndex = colors.indexOf(current.color);
+          const heldTetriminoIndex = colors.indexOf(held.color);
+          current.shape = tetriminos[currentTetriminoIndex];
+          held.shape = tetriminos[heldTetriminoIndex];
+        }
+        currentPosition = { x: Math.floor(cols / 2) - 1, y: 0 };
+        canSwap = false;
+        draw();
+      }
+
+      function control(event) {
+        if (event.key === " ") {
+          rotateTetrimino();
+        } else if (event.key === "ArrowRight") {
+          move(1);
+        } else if (event.key === "ArrowLeft") {
+          move(-1);
+        } else if (event.key === "ArrowDown") {
+          drop();
+        } else if (event.key === "Shift") {
+          swapHeld();
+        } else if (event.key === "r" || event.key === "R") {
+          if (interval === null) {
+            retry();
+          }
+        }
+      }
+
+      let current = randomTetrimino();
+      let next = randomTetrimino();
+      let currentPosition = { x: Math.floor(cols / 2) - 1, y: 0 };
+      let interval = setInterval(drop, 500);
+
+      document.addEventListener('keydown', control);
+      setInterval(draw, 1000 / 60);
+
+      drawNextTetriminos();
+    </script>
+</body>
+
+</html>
