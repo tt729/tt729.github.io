@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="ja">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>チキンレース</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+        }
+
+        canvas {
+            display: block;
+            margin: 0 auto;
+            background-color: #e0e0e0;
+        }
+
+        #gameCanvas {
+            margin-top: 200px;
+        }
+
+        .game-info {
+            text-align: center;
+            font-size: 20px;
+        }
+
+        button {
+            display: block;
+            margin: 20px auto;
+            padding: 10px;
+            font-size: 20px;
+        }
+
+        .controls {
+            justify-content: center;
+            align-items: center;
+        }
+    </style>
+</head>
+
+<body>
+    <canvas id="gameCanvas" width="800" height="100"></canvas>
+    <div class="game-info">
+        <p>ラウンド: <span id="round">1</span>/5</p>
+        <p>得点: <span id="score">0</span></p>
+    </div>
+    <div class="controls">
+        <canvas id="chargeIndicator" width="100" height="100"></canvas>
+        <button id="chargeButton">チャージ</button>
+        <button id="retryButton" style="display: none;">もう一度</button>
+    </div>
+    <script>
+        const gameCanvas = document.getElementById("gameCanvas");
+        const gameCtx = gameCanvas.getContext("2d");
+        const chargeIndicator = document.getElementById("chargeIndicator");
+        const chargeCtx = chargeIndicator.getContext("2d");
+        const roundDisplay = document.getElementById("round");
+        const scoreDisplay = document.getElementById("score");
+        const chargeButton = document.getElementById("chargeButton");
+
+        let charge = 0;
+        let round = 1;
+        let totalScore = 0;
+        let carPosition = 0;
+        let cliffPosition;
+
+        function getRandomCliffPosition() {
+            return Math.random() * (gameCanvas.width * 0.6) + gameCanvas.width * 0.2;
+        }
+
+        let carImage = new Image();
+
+        carImage.onload = function () {
+            init();
+        };
+
+        carImage.src = 'images/car.png';
+
+        const newWidth = 80;
+        const newHeight = (209 / 404) * newWidth;
+
+
+        function drawCar() {
+            gameCtx.drawImage(carImage, carPosition, gameCanvas.height - newHeight, newWidth, newHeight);
+        }
+
+
+
+
+        function drawCliff() {
+            gameCtx.fillStyle = "red";
+            gameCtx.fillRect(cliffPosition, 0, 5, gameCanvas.height);
+        }
+
+        function drawRoad() {
+            gameCtx.fillStyle = "gray";
+            gameCtx.fillRect(0, gameCanvas.height - 20, gameCanvas.width, 20);
+        }
+
+        function draw() {
+            gameCtx.clearRect(0, 0, gameCanvas.width, gameCanvas.height);
+            drawRoad();
+            drawCar();
+            drawCliff();
+        }
+
+        function nextRound() {
+            round++;
+            roundDisplay.textContent = round;
+            charge = 0;
+            carPosition = 0;
+            cliffPosition = getRandomCliffPosition();
+            draw();
+            chargeButton.disabled = false;
+            chargeButton.style.display = "block";
+            retryButton.style.display = "none";
+        }
+
+        function endGame() {
+            chargeButton.style.display = "none";
+            retryButton.style.display = "block";
+            alert("ゲーム終了！合計得点: " + totalScore);
+            retryButton.addEventListener("click", resetGame);
+        }
+
+        function calculateScore() {
+            if (carPosition >= cliffPosition - 80) {
+                return 0;
+            }
+            const distanceFromCliff = cliffPosition - carPosition - 80;
+            const baseScore = 10000;
+            const reductionFactor = 1.1;
+            const pointsLostPerPixels = 5;
+
+            const score = baseScore / Math.pow(reductionFactor, Math.floor(distanceFromCliff / pointsLostPerPixels));
+            return Math.floor(score);
+        }
+
+        function updateScore() {
+            const score = calculateScore();
+            totalScore += score;
+            scoreDisplay.textContent = totalScore;
+
+            if (round < 5) {
+                nextRound();
+            } else {
+                endGame();
+            }
+        }
+
+        function drawChargeIndicator(angle) {
+            chargeCtx.clearRect(0, 0, chargeIndicator.width, chargeIndicator.height);
+
+            chargeCtx.beginPath();
+            chargeCtx.arc(50, 50, 40, 0, angle, false);
+            chargeCtx.lineTo(50, 50);
+            chargeCtx.fillStyle = "green";
+            chargeCtx.fill();
+        }
+
+        let chargeAnimation;
+
+        function updateChargeIndicator() {
+            const elapsedTime = new Date().getTime() - charge;
+            const angle = ((elapsedTime / 1000) * 360) % 360 * (Math.PI / 180);
+            drawChargeIndicator(angle);
+            chargeAnimation = requestAnimationFrame(updateChargeIndicator);
+        }
+
+        let charging = false;
+
+        async function launchCar(distance) {
+            const animationDuration = 1000;
+            const startTime = new Date().getTime();
+
+            while (new Date().getTime() - startTime < animationDuration) {
+                const currentTime = new Date().getTime();
+                const progress = (currentTime - startTime) / animationDuration;
+                carPosition = distance * progress;
+                draw();
+                await new Promise((resolve) => setTimeout(resolve, 1000 / 60));
+            }
+
+            carPosition = distance;
+            draw();
+
+            await new Promise((resolve) => setTimeout(resolve, 1000)); // 1秒間停止
+
+            updateScore(); // Update the score after the car has stopped
+        }
+
+        function startCharge() {
+            if (!charging && !chargeAnimation) {
+                charging = true;
+                charge = new Date().getTime();
+                updateChargeIndicator();
+            }
+        }
+
+        function endCharge() {
+            if (charging) {
+                cancelAnimationFrame(chargeAnimation);
+                chargeAnimation = null;
+                drawChargeIndicator(0);
+
+                const elapsedTime = new Date().getTime() - charge;
+                const angle = ((elapsedTime / 1000) * 360) % 360;
+                const distance = (angle / 359) * MAX_DISTANCE;
+
+                charging = false;
+                chargeButton.disabled = true;
+                launchCar(distance);
+            }
+        }
+
+        const retryButton = document.getElementById("retryButton");
+
+        function resetGame() {
+            round = 0;
+            totalScore = 0;
+            roundDisplay.textContent = round;
+            scoreDisplay.textContent = totalScore;
+            nextRound();
+        }
+
+        const MAX_DISTANCE = 500;
+
+        function init() {
+            cliffPosition = getRandomCliffPosition();
+            draw();
+
+            chargeButton.addEventListener("mousedown", startCharge);
+            chargeButton.addEventListener("touchstart", startCharge);
+            chargeButton.addEventListener("mouseup", endCharge);
+            chargeButton.addEventListener("touchend", endCharge);
+        }
+
+        init();
+
+    </script>
+</body>
+
+</html>
