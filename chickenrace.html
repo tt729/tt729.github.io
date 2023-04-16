@@ -233,6 +233,8 @@
             }
         }
 
+        const MAX_DISTANCE = 720;
+
         function endCharge() {
             if (charging) {
                 cancelAnimationFrame(chargeAnimation);
@@ -258,8 +260,6 @@
             scoreDisplay.textContent = totalScore;
             nextRound();
         }
-
-        const MAX_DISTANCE = 500;
 
         function init() {
             cliffPosition = getRandomCliffPosition();
