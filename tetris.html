@@ -4,7 +4,17 @@
 <head>
   <meta charset="UTF-8">
   <title>テトリス</title>
+  <link rel="preconnect" href="https://fonts.gstatic.com">
+  <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400&display=swap" rel="stylesheet">
   <style>
+    * {
+      font-family: 'Roboto', sans-serif;
+    }
+
+    body {
+      background-color: #e0e0e0;
+    }
+
     #container {
       display: flex;
       flex-direction: column;
@@ -16,10 +26,12 @@
       display: flex;
       justify-content: center;
       align-items: flex-end;
+      margin-bottom: 20px;
     }
 
     canvas {
-      background-color: #f0f0f0;
+      background-color: #ffffff;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
     }
 
     #controls {
@@ -29,10 +41,12 @@
       padding: 10px;
       border-radius: 5px;
       margin-left: 10px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
     }
   </style>
 
 </head>
+
 
 <body>
   <p><a href="index.html">トップページへ戻る</a></p>
@@ -90,6 +104,8 @@
 
         return { shape: tetriminos[index], color: colors[index] };
       }
+
+
 
       function drawBlock(x, y, color) {
         ctx.fillStyle = color;
@@ -319,6 +335,11 @@
           if (interval === null) {
             retry();
           }
+        }
+
+        // 矢印キーのデフォルトの動作をキャンセル
+        if (["ArrowRight", "ArrowLeft", "ArrowDown"].includes(event.key)) {
+          event.preventDefault();
         }
       }
 
